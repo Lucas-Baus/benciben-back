@@ -22,31 +22,27 @@ const Consulta = mongoose.model('Consulta', new mongoose.Schema({
   fecha: { type: Date, default: Date.now }
 }));
 
-
-// --- CONFIGURACIÓN DE NODEMAILER (MODO SERVICE GMAIL) ---
+// --- CONFIGURACIÓN DE NODEMAILER (AQUÍ ESTÁ EL PUERTO 587) ---
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,            // <--- ESTE ES EL PUERTO CORRECTO PARA RENDER
+  secure: false,         // Debe ser false para el puerto 587
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
+    minVersion: "TLSv1.2"
   }
 });
 
-// Esto es lo más importante: si esto falla en los logs, es la clave de Google
+// Verificación de conexión al arrancar el servidor
 transporter.verify((error) => {
   if (error) {
-    console.log("❌ Error de Gmail:", error);
+    console.log("❌ Error de configuración de Gmail:", error);
   } else {
-    console.log("📧 ¡Servidor de mail listo para enviar!");
-  }
-});
-
-// Verificación de conexión inmediata al arrancar
-transporter.verify((error) => {
-  if (error) {
-    console.log("❌ Error en la configuración de Gmail:", error);
-  } else {
-    console.log("📧 ¡Servidor de mail listo para enviar!");
+    console.log("📧 ¡Servidor de mail listo para enviar (Puerto 587)!");
   }
 });
 
@@ -72,13 +68,13 @@ app.post('/api/consulta', async (req, res) => {
     res.status(200).json({ message: '¡Consulta enviada con éxito!' });
 
   } catch (error) {
-    console.error("❌ Error en el proceso:", error);
-    res.status(500).json({ error: 'Hubo un error al procesar' });
+    console.error("❌ Error en el proceso de envío:", error);
+    res.status(500).json({ error: 'Hubo un error al procesar el mail' });
   }
 });
 
 // --- INICIO DEL SERVIDOR ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor Benciben v4 corriendo en puerto ${PORT}`);
 });
