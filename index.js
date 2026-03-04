@@ -22,18 +22,22 @@ const Consulta = mongoose.model('Consulta', new mongoose.Schema({
   fecha: { type: Date, default: Date.now }
 }));
 
-// --- CONFIGURACIÓN DE NODEMAILER (DEFINITIVA PARA RENDER) ---
+
+// --- CONFIGURACIÓN DE NODEMAILER (MODO SERVICE GMAIL) ---
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // false para usar STARTTLS
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
-    minVersion: "TLSv1.2"
+  }
+});
+
+// Esto es lo más importante: si esto falla en los logs, es la clave de Google
+transporter.verify((error) => {
+  if (error) {
+    console.log("❌ Error de Gmail:", error);
+  } else {
+    console.log("📧 ¡Servidor de mail listo para enviar!");
   }
 });
 
