@@ -1,83 +1,77 @@
-require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
 const app = express();
 
-// Middlewares
+// --- MIDDLEWARES ---
 app.use(cors());
 app.use(express.json());
 
-// 1. Conexión a MongoDB Atlas
+// --- CONEXIÓN A MONGODB ---
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Conectado a MongoDB Atlas"))
-    .catch(err => console.error("❌ Error de conexión a Mongo:", err));
+  .then(() => console.log('✅ Conectado a MongoDB Atlas'))
+  .catch(err => console.error('❌ Error de conexión a Mongo:', err));
 
-// 2. Modelo de la Consulta
-const consultaSchema = new mongoose.Schema({
-    nombre: String,
-    empresa: String,
-    email: String,
-    mensaje: String,
-    fecha: { type: Date, default: Date.now }
+// --- MODELO DE DATOS ---
+const ConsultaSchema = new mongoose.Schema({
+  nombre: String,
+  empresa: String,
+  email: String,
+  mensaje: String,
+  fecha: { type: Date, default: Date.now }
 });
 
-const Consulta = mongoose.model('Consulta', consultaSchema, 'consultas');
+const Consulta = mongoose.model('Consulta', ConsultaSchema);
 
-// 3. Configuración de Nodemailer
+// --- CONFIGURACIÓN DE NODEMAILER (CORREGIDA PARA RENDER) ---
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS // Recordá: las 16 letras sin espacios
-    }
+  host: 'smtp.gmail.com',
+  port: 587, // Puerto compatible con Render
+  secure: false, // Debe ser false para el puerto 587
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false // Evita bloqueos de seguridad en el servidor
+  }
 });
 
-// 4. Ruta POST para recibir el formulario
+// --- RUTA PARA RECIBIR CONSULTAS ---
 app.post('/api/consulta', async (req, res) => {
-    console.log("📩 Datos recibidos:", req.body);
+  const { nombre, empresa, email, mensaje } = req.body;
 
-    try {
-        // PASO A: Guardar en MongoDB
-        const nuevaConsulta = new Consulta(req.body);
-        await nuevaConsulta.save();
-        console.log("💾 Guardado en MongoDB con éxito");
+  try {
+    // 1. Guardar en la base de datos
+    const nuevaConsulta = new Consulta({ nombre, empresa, email, mensaje });
+    await nuevaConsulta.save();
+    console.log("💾 Consulta guardada en la base de datos");
 
-        // PASO B: Responder al Frontend inmediatamente
-        // Esto libera el botón de "Enviando..." en tu web
-        res.status(201).json({ status: 'ok', mensaje: 'Consulta guardada' });
+    // 2. Enviar el correo electrónico
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: 'ventas.benciben@gmail.com', // Tu mail de ventas
+      subject: `🚀 Nueva consulta web: ${nombre}`,
+      text: `Has recibido una nueva consulta:\n\nNombre: ${nombre}\nEmpresa: ${empresa}\nEmail: ${email}\nMensaje: ${mensaje}`
+    };
 
-        // PASO C: Intentar enviar el mail (sin bloquear el resto)
-        const mailOptions = {
-            from: `"Web Benciben" <${process.env.EMAIL_USER}>`,
-            to: process.env.EMAIL_USER,
-            subject: `📦 Nueva consulta de ${req.body.nombre}`,
-            html: `
-                <h2>Nuevo mensaje de presupuesto</h2>
-                <p><strong>Nombre:</strong> ${req.body.nombre}</p>
-                <p><strong>Empresa:</strong> ${req.body.empresa}</p>
-                <p><strong>Email:</strong> ${req.body.email}</p>
-                <p><strong>Mensaje:</strong> ${req.body.mensaje}</p>
-            `
-        };
+    await transporter.sendMail(mailOptions);
+    console.log("📧 Mail enviado correctamente");
 
-        transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                console.log("⚠️ El mensaje se guardó en DB pero el mail falló:", error.message);
-            } else {
-                console.log("📧 Mail enviado con éxito:", info.messageId);
-            }
-        });
+    res.status(200).json({ message: 'Consulta procesada con éxito' });
 
-    } catch (error) {
-        console.error("❌ Error en el servidor:", error);
-        res.status(500).json({ status: 'error', detalle: error.message });
-    }
+  } catch (error) {
+    console.error("❌ Error en el proceso:", error);
+    // Aunque el mail falle, si se guardó en DB avisamos
+    res.status(500).json({ error: 'Hubo un problema al procesar la consulta' });
+  }
 });
 
-const PORT = process.env.PORT || 10000; 
+// --- PUERTO DINÁMICO PARA RENDER ---
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
