@@ -11,7 +11,7 @@ app.use(express.json());
 // --- CONEXIÓN A MONGODB ---
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Conectado a MongoDB Atlas'))
-  .catch(err => console.error('❌ Error de conexión a Mongo:', err));
+  .catch(err => console.error('❌ Error de conexión:', err));
 
 // --- MODELO DE DATOS ---
 const Consulta = mongoose.model('Consulta', new mongoose.Schema({
@@ -22,59 +22,58 @@ const Consulta = mongoose.model('Consulta', new mongoose.Schema({
   fecha: { type: Date, default: Date.now }
 }));
 
-// --- CONFIGURACIÓN DE NODEMAILER (AQUÍ ESTÁ EL PUERTO 587) ---
+// --- CONFIGURACIÓN DE NODEMAILER (SERVICE + PUERTO 587) ---
 const transporter = nodemailer.createTransport({
+  service: 'gmail',    // <--- CAMBIO DE GMAIL SERVICE
   host: 'smtp.gmail.com',
-  port: 587,            // <--- ESTE ES EL PUERTO CORRECTO PARA RENDER
-  secure: false,         // Debe ser false para el puerto 587
+  port: 587,           // <--- PUERTO 587 EXPLÍCITO
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false,
-    minVersion: "TLSv1.2"
+    rejectUnauthorized: false
   }
 });
 
-// Verificación de conexión al arrancar el servidor
+// Verificación de conexión
 transporter.verify((error) => {
-  if (error) {
-    console.log("❌ Error de configuración de Gmail:", error);
-  } else {
-    console.log("📧 ¡Servidor de mail listo para enviar (Puerto 587)!");
-  }
+  if (error) console.log("❌ Error inicial de mail:", error.message);
+  else console.log("📧 ¡Servidor de mail listo (Gmail Service + 587)!");
 });
 
-// --- RUTA POST ---
+// --- RUTA POST (RESPUESTA INMEDIATA AL FRONT) ---
 app.post('/api/consulta', async (req, res) => {
   const { nombre, empresa, email, mensaje } = req.body;
 
   try {
-    // 1. Guardar en Base de Datos
+    // 1. Guardar en DB primero
     const nuevaConsulta = new Consulta({ nombre, empresa, email, mensaje });
     await nuevaConsulta.save();
     console.log("💾 Consulta guardada en DB");
 
-    // 2. Enviar Mail
-    await transporter.sendMail({
+    // 2. Responder al Front al toque (Para que no salga el cartel de error)
+    res.status(200).json({ message: '¡Consulta enviada con éxito!' });
+
+    // 3. Mandar el mail de fondo
+    transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: 'ventas.benciben@gmail.com',
       subject: `🚀 Nueva consulta web: ${nombre}`,
-      text: `Datos del contacto:\n\nNombre: ${nombre}\nEmpresa: ${empresa}\nEmail: ${email}\nMensaje: ${mensaje}`
+      text: `Nombre: ${nombre}\nEmpresa: ${empresa}\nEmail: ${email}\nMensaje: ${mensaje}`
+    }, (err, info) => {
+      if (err) console.log("❌ Fallo el mail de fondo:", err.message);
+      else console.log("📧 Mail enviado correctamente");
     });
 
-    console.log("📧 Mail enviado correctamente");
-    res.status(200).json({ message: '¡Consulta enviada con éxito!' });
-
   } catch (error) {
-    console.error("❌ Error en el proceso de envío:", error);
-    res.status(500).json({ error: 'Hubo un error al procesar el mail' });
+    console.error("❌ Error en el proceso:", error);
+    res.status(500).json({ error: 'Error del servidor' });
   }
 });
 
-// --- INICIO DEL SERVIDOR ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor Benciben v4 corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor Benciben v6 (FINAL) corriendo en puerto ${PORT}`);
 });
